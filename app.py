@@ -272,7 +272,17 @@ def direct_analyze():
         }), 500
 
 if __name__ == '__main__':
+    import os
+    
+    # 从环境变量获取端口，默认 10000（Render 要求）
+    port = int(os.environ.get('PORT', 10000))
+    
     print("🚀 启动言之有品后端服务...")
-    print("本地访问: http://localhost:5000")
-    print("健康检查: http://localhost:5000/health")
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    if port == 10000:
+        print("运行在 Render 上")
+        print("健康检查: https://yzp0.onrender.com/health")
+    else:
+        print(f"本地访问: http://localhost:{port}")
+        print(f"健康检查: http://localhost:{port}/health")
+    
+    app.run(debug=False, host='0.0.0.0', port=port)
