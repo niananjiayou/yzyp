@@ -1,0 +1,510 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>言之有品 · 评论分析大屏</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<style>
+  :root {
+    --primary: #4f8ef7;
+    --good: #34c38f;
+    --bad: #f46a6a;
+    --warn: #f1b44c;
+    --bg: #f4f7fe;
+    --card: #ffffff;
+    --text: #2d3748;
+    --sub: #718096;
+    --border: #e2e8f0;
+    --shadow: 0 2px 16px rgba(79,142,247,0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); font-family: 'Microsoft YaHei', '微软雅黑', sans-serif; color: var(--text); min-height: 100vh; }
+
+  .header {
+    background: linear-gradient(rgba(0,0,0,0.25), rgba(0,0,0,0.25)),
+                url('bg.jpg') center/cover no-repeat;
+    color: white; padding: 28px 40px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  }
+  .header-left h1 { font-size: 26px; font-weight: 700; letter-spacing: 2px; }
+  .header-left p  { font-size: 13px; opacity: .8; margin-top: 4px; }
+  .header-right   { font-size: 13px; opacity: .75; text-align: right; }
+
+  .tab-bar {
+    display: flex; gap: 12px; padding: 20px 40px 0;
+    flex-wrap: wrap;
+  }
+  .tab-btn {
+    padding: 8px 22px; border-radius: 24px; border: 2px solid var(--primary);
+    background: white; color: var(--primary); cursor: pointer;
+    font-size: 14px; font-weight: 600; transition: all .2s;
+  }
+  .tab-btn.active, .tab-btn:hover {
+    background: var(--primary); color: white;
+  }
+
+  .main { padding: 24px 40px 40px; }
+
+  .overview-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
+  }
+  .ov-card {
+    background: var(--card); border-radius: 16px; padding: 20px 24px;
+    box-shadow: var(--shadow); border-left: 5px solid var(--primary);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .ov-card.green  { border-left-color: var(--good); }
+  .ov-card.red    { border-left-color: var(--bad); }
+  .ov-card.yellow { border-left-color: var(--warn); }
+  .ov-card .label { font-size: 13px; color: var(--sub); }
+  .ov-card .value { font-size: 30px; font-weight: 700; color: var(--text); }
+  .ov-card .unit  { font-size: 13px; color: var(--sub); }
+
+  .chart-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;
+  }
+  .chart-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .card {
+    background: var(--card); border-radius: 16px; padding: 24px;
+    box-shadow: var(--shadow);
+  }
+  .card h3 {
+    font-size: 15px; font-weight: 700; color: var(--text);
+    margin-bottom: 16px; padding-bottom: 10px;
+    border-bottom: 2px solid var(--bg);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .chart-wrap { position: relative; height: 240px; }
+  .chart-wrap-tall { position: relative; height: 300px; }
+
+  .kw-cloud { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 4px; }
+  .kw-tag {
+    padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+    cursor: default; transition: transform .15s;
+  }
+  .kw-tag:hover { transform: scale(1.08); }
+  .kw-good { background: #e6f9f2; color: #1a7a56; }
+  .kw-bad  { background: #fff0f0; color: #c0392b; }
+
+  .aspect-list { display: flex; flex-direction: column; gap: 12px; }
+  .aspect-item { display: flex; flex-direction: column; gap: 4px; }
+  .aspect-header { display: flex; justify-content: space-between; font-size: 13px; }
+  .aspect-name { font-weight: 600; }
+  .aspect-count { color: var(--sub); }
+  .aspect-bar-bg { height: 10px; background: var(--bg); border-radius: 6px; overflow: hidden; }
+  .aspect-bar-fill {
+    height: 100%; border-radius: 6px;
+    background: linear-gradient(90deg, #4f8ef7, #7c3aed);
+    transition: width .6s ease;
+  }
+
+  .suggestion-box {
+    background: linear-gradient(135deg, #f0f4ff 0%, #faf0ff 100%);
+    border: 1px solid #d0d8ff; border-radius: 16px; padding: 28px 32px;
+    line-height: 1.9; font-size: 14px; white-space: pre-wrap;
+    box-shadow: var(--shadow);
+  }
+  .suggestion-box strong { color: var(--primary); }
+
+  .wc-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;
+  }
+  .wc-img-wrap {
+    background: var(--card); border-radius: 16px; padding: 24px;
+    box-shadow: var(--shadow); text-align: center;
+  }
+  .wc-img-wrap h3 {
+    font-size: 15px; font-weight: 700; margin-bottom: 14px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--bg);
+  }
+  .wc-img-wrap img {
+    max-width: 100%; border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .wc-img-wrap .no-img {
+    color: var(--sub); font-size: 13px; padding: 40px 0;
+  }
+
+  .empty { text-align: center; color: var(--sub); padding: 60px; font-size: 15px; }
+
+  .loading {
+    display: flex; align-items: center; justify-content: center;
+    height: 300px; flex-direction: column; gap: 12px;
+  }
+  .spinner {
+    width: 40px; height: 40px; border: 4px solid var(--border);
+    border-top-color: var(--primary); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 900px) {
+    .overview-row { grid-template-columns: 1fr 1fr; }
+    .chart-row, .chart-row.three, .wc-row { grid-template-columns: 1fr; }
+    .main, .tab-bar, .header { padding-left: 16px; padding-right: 16px; }
+  }
+
+  .footer {
+    text-align: center; padding: 20px;
+    color: var(--sub); font-size: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* 暂无数据提示样式 */
+  .no-data-tip {
+    text-align: center; padding: 60px 20px; color: var(--sub);
+  }
+  .no-data-tip .icon { font-size: 48px; margin-bottom: 16px; }
+  .no-data-tip h2 { font-size: 18px; color: var(--text); margin-bottom: 8px; }
+  .no-data-tip p { font-size: 14px; line-height: 1.8; }
+  .no-data-tip code {
+    background: #f0f4ff; padding: 2px 8px; border-radius: 6px;
+    color: var(--primary); font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>🎯 言之有品 · 评论智能分析大屏</h1>
+    <p>AI驱动 · 真实用户声音 · 数据驱动决策</p>
+  </div>
+  <div class="header-right">
+    <div id="updateTime">加载中...</div>
+    <div style="margin-top:4px">数据来源：言之有品分析API</div>
+  </div>
+</div>
+
+<div class="tab-bar" id="tabBar">
+  <div class="loading"><div class="spinner"></div><span>正在读取数据...</span></div>
+</div>
+
+<div class="main" id="mainContent"></div>
+
+<div class="footer">© 言之有品 · 评论分析平台 | 让每一条评论都发挥价值</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  全局数据
+// ══════════════════════════════════════════════
+let allData   = [];
+let curIdx    = 0;
+let chartRefs = {};
+
+// ══════════════════════════════════════════════
+//  ✅ 改动1：从 /api/result 接口读取数据（不再读本地json文件）
+// ══════════════════════════════════════════════
+async function loadData() {
+  try {
+    const res = await fetch('/api/result');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+
+    // 接口返回格式：{ success: true/false, results: [...], message: '...' }
+    if (!json.success || !json.results || json.results.length === 0) {
+      // 暂无数据时显示友好提示，而不是报错
+      document.getElementById('tabBar').innerHTML = '';
+      document.getElementById('mainContent').innerHTML = `
+        <div class="no-data-tip">
+          <div class="icon">📭</div>
+          <h2>暂无分析数据</h2>
+          <p>还没有进行过任何评论分析。<br>
+          请通过扣子Bot发送评论数据，调用 <code>POST /analyze</code> 接口后，<br>
+          刷新此页面即可看到分析结果。</p>
+        </div>`;
+      document.getElementById('updateTime').textContent = '暂无数据';
+      return;
+    }
+
+    allData = json.results;
+    init();
+
+  } catch(e) {
+    document.getElementById('tabBar').innerHTML =
+      `<div class="empty">❌ 读取失败：${e.message}<br><br>
+       请确认服务已正常启动，且 <code>/api/result</code> 接口可访问</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════
+//  初始化 Tab
+// ══════════════════════════════════════════════
+function init() {
+  document.getElementById('updateTime').textContent =
+    '分析时间：' + new Date().toLocaleString('zh-CN');
+
+  const bar = document.getElementById('tabBar');
+  bar.innerHTML = '';
+
+  allData.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i === 0 ? ' active' : '');
+    btn.textContent = p.product_name;
+    btn.onclick = () => switchTab(i);
+    bar.appendChild(btn);
+  });
+
+  renderProduct(0);
+}
+
+function switchTab(idx) {
+  curIdx = idx;
+  document.querySelectorAll('.tab-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === idx);
+  });
+  Object.values(chartRefs).forEach(c => { try { c.destroy(); } catch(e){} });
+  chartRefs = {};
+  renderProduct(idx);
+}
+
+// ══════════════════════════════════════════════
+//  渲染单个产品
+// ══════════════════════════════════════════════
+function renderProduct(idx) {
+  const d   = allData[idx];
+  const mc  = document.getElementById('mainContent');
+
+  const catDist  = d.category_distribution || {};
+  const total    = d.total_reviews || 0;
+  const goodCnt  = catDist['有效好评']  || 0;
+  const badCnt   = catDist['有效差评']  || 0;
+  const fakeCnt  = total - goodCnt - badCnt;
+  const goodRate = total > 0 ? ((goodCnt / total) * 100).toFixed(1) : 0;
+
+  mc.innerHTML = `
+    <div class="overview-row">
+      <div class="ov-card">
+        <div class="label">📊 总评论数</div>
+        <div class="value">${total}</div>
+        <div class="unit">条</div>
+      </div>
+      <div class="ov-card green">
+        <div class="label">✅ 有效好评</div>
+        <div class="value">${goodCnt}</div>
+        <div class="unit">好评率 ${goodRate}%</div>
+      </div>
+      <div class="ov-card red">
+        <div class="label">❌ 有效差评</div>
+        <div class="value">${badCnt}</div>
+        <div class="unit">差评率 ${total>0?((badCnt/total)*100).toFixed(1):0}%</div>
+      </div>
+      <div class="ov-card yellow">
+        <div class="label">🚫 过滤/无效</div>
+        <div class="value">${fakeCnt}</div>
+        <div class="unit">占比 ${total>0?((fakeCnt/total)*100).toFixed(1):0}%</div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="card">
+        <h3>📈 评论分类分布</h3>
+        <div class="chart-wrap"><canvas id="catChart"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>📐 用户关注维度 TOP</h3>
+        <div class="chart-wrap-tall"><canvas id="aspectChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="wc-row">
+      <div class="wc-img-wrap">
+        <h3>💙 好评词云</h3>
+        <div id="wcGoodWrap"></div>
+      </div>
+      <div class="wc-img-wrap">
+        <h3>❤️ 差评词云</h3>
+        <div id="wcBadWrap"></div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <div class="card">
+        <h3>💚 买家夸的关键词</h3>
+        <div id="goodKW" class="kw-cloud"></div>
+      </div>
+      <div class="card">
+        <h3>🔴 买家骂的关键词</h3>
+        <div id="badKW" class="kw-cloud"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:0">
+      <h3>📋 给您的建议报告</h3>
+      <div class="suggestion-box" id="suggestionBox"></div>
+    </div>
+  `;
+
+  renderCatChart(catDist);
+  renderAspectChart(d.aspect_mention_count || {});
+  renderKeywords(d.good_keywords || {}, 'goodKW', 'kw-good');
+  renderKeywords(d.bad_keywords  || {}, 'badKW',  'kw-bad');
+  renderSuggestion(d.suggestion || '暂无建议');
+
+  // ✅ 改动2：用 base64 数据渲染词云图，不再读本地文件
+  renderWordcloudBase64(d.good_wordcloud_base64, 'wcGoodWrap', '好评词云');
+  renderWordcloudBase64(d.bad_wordcloud_base64,  'wcBadWrap',  '差评词云');
+}
+
+// ── 分类饼图 ──────────────────────────────────
+function renderCatChart(catDist) {
+  const labels = Object.keys(catDist);
+  const values = Object.values(catDist);
+  const total  = values.reduce((a, b) => a + b, 0);
+
+  const paletteMap = {
+    '有效好评':       '#84c3b7',
+    '有效差评':       '#f57c6e',
+    '刷评':           '#f2b56f',
+    '恶意差评':       '#F5C6C3',
+    '无效评论':       '#D4D8F1',
+    '硬过滤_默认文案':'#C8E5E4',
+    'AI过滤':         '#E3E2F0',
+  };
+  const fallbacks = ['#b8aeeb','#fae69e','#88d8db','#71b7ed','#f2a7da','#EAC8DF'];
+  let fi = 0;
+  const colors = labels.map(l => paletteMap[l] || fallbacks[fi++ % fallbacks.length]);
+
+  const ctx = document.getElementById('catChart').getContext('2d');
+  chartRefs.cat = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 3,
+        borderColor: '#fff',
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { font: { size: 12 }, padding: 14, color: '#4a5568' }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.label}: ${ctx.parsed} 条 (${((ctx.parsed / total) * 100).toFixed(1)}%)`
+          }
+        },
+        datalabels: {
+          color: '#fff',
+          font: { size: 12, weight: 'bold' },
+          formatter: (value) => {
+            const pct = ((value / total) * 100).toFixed(1);
+            return pct < 8 ? '' : `${pct}%`;
+          }
+        }
+      }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+// ── 维度横向柱图 ──────────────────────────────
+function renderAspectChart(aspectData) {
+  const sorted = Object.entries(aspectData).sort((a, b) => b[1] - a[1]);
+  const labels = sorted.map(x => x[0]);
+  const values = sorted.map(x => x[1]);
+
+  const barPalette = [
+    '#9DCDE1','#AFD8E4','#b8aeeb','#84c3b7',
+    '#88d8db','#71b7ed','#f2a7da','#EAC8DF',
+    '#fae69e','#f2b56f'
+  ];
+  const bgColors = labels.map((_, i) => barPalette[i % barPalette.length]);
+
+  const ctx = document.getElementById('aspectChart').getContext('2d');
+  chartRefs.aspect = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '提及次数',
+        data: values,
+        backgroundColor: bgColors,
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          anchor: 'end', align: 'end',
+          color: '#4a5568',
+          font: { size: 12, weight: 'bold' },
+          formatter: value => `${value} 次`
+        }
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          grid: { color: '#f0f0f0' },
+          ticks: { color: '#718096' }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { font: { size: 12 }, color: '#4a5568' }
+        }
+      },
+      layout: { padding: { right: 20 } }
+    },
+    plugins: [ChartDataLabels]
+  });
+}
+
+// ── 关键词气泡 ────────────────────────────────
+function renderKeywords(kwObj, containerId, cls) {
+  const container = document.getElementById(containerId);
+  if (!kwObj || Object.keys(kwObj).length === 0) {
+    container.innerHTML = '<span style="color:#aaa;font-size:13px">暂无关键词</span>';
+    return;
+  }
+  const sorted = Object.entries(kwObj).sort((a,b) => b[1]-a[1]).slice(0, 25);
+  const max = sorted[0][1] || 1;
+  container.innerHTML = sorted.map(([w, s]) => {
+    const size = 12 + Math.round((s / max) * 8);
+    return `<span class="kw-tag ${cls}" style="font-size:${size}px">${w}</span>`;
+  }).join('');
+}
+
+// ✅ 改动2：用 base64 渲染词云（替换原来的 renderWordcloudImages）
+function renderWordcloudBase64(b64str, wrapId, altText) {
+  const wrap = document.getElementById(wrapId);
+  if (!b64str) {
+    wrap.innerHTML = `<div class="no-img">🖼️ 词云图暂未生成<br><small>请先调用分析接口</small></div>`;
+    return;
+  }
+  const img = document.createElement('img');
+  img.src = `data:image/png;base64,${b64str}`;
+  img.alt = altText;
+  img.style.cssText = 'max-width:100%;border-radius:10px;border:1px solid #e2e8f0';
+  wrap.appendChild(img);
+}
+
+// ── AI建议渲染 ────────────────────────────────
+function renderSuggestion(text) {
+  const box = document.getElementById('suggestionBox');
+  const html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  box.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════
+//  启动
+// ══════════════════════════════════════════════
+loadData();
+</script>
+</body>
+</html>
